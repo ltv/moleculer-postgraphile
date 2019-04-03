@@ -161,39 +161,5 @@ describe('>> postgraphile <<', () => {
         }
       });
     });
-
-    it('Should run correct mutation', async () => {
-      // Use public schema, there is PubPost table with data
-      const query: string = `
-        mutation createPubPost($input: CreatePubPostInput!) {
-          createPubPost(input: $input) {
-            pubPost {
-              id
-              title
-              content
-            }
-          }
-        }
-      `;
-      const variables = {
-        input: {
-          pubPost: {
-            title: 'Hello',
-            content: 'World'
-          }
-        }
-      };
-      const response: any = await broker.call('public.graphql', {
-        query,
-        variables
-      });
-      expect(response).toMatchObject({
-        data: {
-          createPubPost: {
-            pubPost: expect.any(Object)
-          }
-        }
-      });
-    });
   });
 });
