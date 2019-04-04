@@ -1,6 +1,6 @@
 import { PostgraphileMixin } from '../postgraphile';
 import { Pool } from 'pg';
-import { ServiceBroker, Service } from 'moleculer';
+import { ServiceBroker, Service, Context } from 'moleculer';
 
 describe('>> postgraphile <<', () => {
   it('Should creat mixin correctly', () => {
@@ -91,7 +91,7 @@ describe('>> postgraphile <<', () => {
       expect(hasAction).toEqual(true);
     });
 
-    it('Should set schema to cache if cacher present', async () => {
+    it('Should set schema to cache if cache present', async () => {
       expect.assertions(2);
       const [services, actions] = await Promise.all([
         broker.call('$node.services'),
@@ -110,55 +110,168 @@ describe('>> postgraphile <<', () => {
       cacher: 'Memory'
     });
 
-    broker.createService({
-      name: 'public',
-      mixins: [
-        PostgraphileMixin({
-          schema: 'public',
-          pgPool: new Pool({
-            connectionString: process.env.DATABASE_URL
-          })
-        })
-      ]
-    });
-
-    broker.createService({
+    const testSchema = {
       name: 'test',
       actions: {
-        checkSchemaCache() {
-          return this.broker.cacher.get('graphql.schema.public');
+        checkSchemaCache(ctx: Context) {
+          const { cacheKey } = ctx.params;
+          return this.broker.cacher.get(cacheKey);
         }
       }
-    });
+    };
 
-    beforeAll(() => broker.start());
-    afterAll(() => broker.stop());
+    const cache = {
+      prefix: 'my_prefix',
+      name: 'my_cache_name'
+    };
 
-    it('Should set schema to cache if cacher present', async () => {
-      const schemaDataFromCache = broker.call('test.checkSchemaCache');
-      expect(schemaDataFromCache).toBeTruthy();
-    });
+    describe('-- DONOT CACHE --', () => {
+      broker.createService({
+        name: 'public',
+        mixins: [
+          PostgraphileMixin({
+            schema: 'public',
+            pgPool: new Pool({
+              connectionString: process.env.DATABASE_URL
+            }),
+            cache: false
+          })
+        ]
+      });
 
-    it('Should return list of data if call graphql', async () => {
-      // Use public schema, there is PubPost table with data
-      const query: string = `
-        query { 
-          allPubPosts {
-            nodes {
-              id
-              title
-              content
+      broker.createService(testSchema);
+
+      beforeAll(() => broker.start().then(() => broker.cacher.clean('*.*.*')));
+      afterAll(() => broker.stop());
+
+      it('Shouldnot set schema to cache if cache set to false', async () => {
+        const schemaDataFromCache = await broker.call('test.checkSchemaCache', {
+          cacheKey: 'graphile.schema.public'
+        });
+        expect(schemaDataFromCache).toBeFalsy();
+      });
+
+      it('Should return list of data if call graphql', async () => {
+        // Use public schema, there is PubPost table with data
+        const query: string = `
+          query { 
+            allPubPosts {
+              nodes {
+                id
+                title
+                content
+              }
             }
           }
-        }
-      `;
-      const response: any = await broker.call('public.graphql', { query });
-      expect(response).toMatchObject({
-        data: {
-          allPubPosts: {
-            nodes: expect.any(Array)
+        `;
+        const response: any = await broker.call('public.graphql', { query });
+        expect(response).toMatchObject({
+          data: {
+            allPubPosts: {
+              nodes: expect.any(Array)
+            }
           }
-        }
+        });
+      });
+    });
+
+    describe('-- DEFAULT CACHE --', () => {
+      broker.createService({
+        name: 'public',
+        mixins: [
+          PostgraphileMixin({
+            schema: 'public',
+            pgPool: new Pool({
+              connectionString: process.env.DATABASE_URL
+            }),
+            cache: true
+          })
+        ]
+      });
+
+      broker.createService(testSchema);
+
+      beforeAll(() => broker.start().then(() => broker.cacher.clean('*')));
+      afterAll(() => broker.stop());
+
+      it('Should set schema to cache if cache present with default cache option `graphile.schema.${schemaName}`', async () => {
+        const schemaDataFromCache = await broker.call('test.checkSchemaCache', {
+          cacheKey: 'graphile.schema.public'
+        });
+        expect(schemaDataFromCache).toBeTruthy();
+      });
+
+      it('Should return list of data if call graphql', async () => {
+        // Use public schema, there is PubPost table with data
+        const query: string = `
+          query { 
+            allPubPosts {
+              nodes {
+                id
+                title
+                content
+              }
+            }
+          }
+        `;
+        const response: any = await broker.call('public.graphql', { query });
+        expect(response).toMatchObject({
+          data: {
+            allPubPosts: {
+              nodes: expect.any(Array)
+            }
+          }
+        });
+      });
+    });
+
+    describe('-- CUSTOM CACHE --', () => {
+      broker.createService({
+        name: 'public',
+        mixins: [
+          PostgraphileMixin({
+            schema: 'public',
+            pgPool: new Pool({
+              connectionString: process.env.DATABASE_URL
+            }),
+            cache
+          })
+        ]
+      });
+
+      broker.createService(testSchema);
+
+      beforeAll(() => broker.start().then(() => broker.cacher.clean('*')));
+      afterAll(() => broker.stop());
+
+      it('Should set schema to cache if cacher present with custom cacher option `${prefix}.schema.${name}`', async () => {
+        const schemaDataFromCache = await broker.call('test.checkSchemaCache', {
+          cacheKey: `${cache.prefix}.schema.${cache.name}`
+        });
+        expect(schemaDataFromCache).toBeTruthy();
+      });
+
+      it('Should return list of data if call graphql', async () => {
+        // Use public schema, there is PubPost table with data
+        const query: string = `
+          query { 
+            allPubPosts {
+              nodes {
+                id
+                title
+                content
+              }
+            }
+          }
+        `;
+        const response: any = await broker.call('public.graphql', { query });
+        expect(response).toMatchObject({
+          data: {
+            allPubPosts: {
+              nodes: expect.any(Array)
+            }
+          }
+        });
       });
     });
   });

@@ -79,18 +79,34 @@ broker.call('serviceName.graphql', { query, variables });
 
 ```js
 if (this.broker.cacher) {
-  this.broker.cacher.get(`graphql.schema.${schemaName}`);
+  this.broker.cacher.get(`graphile.schema.${schemaName}`);
 }
+```
+
+- Custom cache key
+
+```js
+PostgraphileMixin({
+  schema: 'public',
+  pgPool: new Pool({
+    connectionString: process.env.DATABASE_URL
+  }),
+  cache: {
+    prefix: 'my_key_prefix',
+    name: 'my_key_name'
+  }
+});
 ```
 
 - Available options:
 
 ```js
 export interface MixinOptions {
-  schema: string; // Schema name
-  pgPool: pg.Pool; // pgPool
-  options?: PostGraphileCoreOptions; // Postgraphile option
-  action?: string; // action name
+  schema: string; // Schema name -> required
+  pgPool: pg.Pool; // pgPool -> required
+  options?: PostGraphileCoreOptions; // Postgraphile option -> default = {}
+  action?: string; // action name -> default = 'graphql'
+  cache?: { prefix: string, name: string }; // for setting cache -> default = true
 }
 ```
 

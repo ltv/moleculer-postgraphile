@@ -2,8 +2,8 @@ import { BrokerOptions } from 'moleculer';
 import os from 'os';
 
 const brokerConfig: BrokerOptions = {
-  // cacher: 'Memory',
-  cacher: 'redis://localhost:6379',
+  cacher: 'Memory',
+  // cacher: 'redis://localhost:6379',
   logFormatter: 'default',
   logLevel: 'info',
   logger: true,
